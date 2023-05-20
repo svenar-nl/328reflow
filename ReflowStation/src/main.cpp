@@ -3,16 +3,21 @@
 #include <Adafruit_SSD1331.h>
 #include <SPI.h>
 #include <Encoder.h>
+#include <max6675.h>
 #include "icons.h"
 
-#define sclk 13
-#define mosi 11
-#define cs   10
-#define rst  9
-#define dc   8
-#define rotaryA 2
-#define rotaryB 3
-#define button1 4
+#define sclk        13
+#define miso        12
+#define mosi        11
+#define oled_cs     10
+#define thermo_cs   7
+#define rst         9
+#define dc          8
+#define rotaryA     2
+#define rotaryB     3
+#define button1     4
+#define heatOutput1 5
+#define heatOutput2 6
 
 #define	BLACK           0x0000
 #define	GRAY            0xAD75
@@ -26,12 +31,15 @@
 #define DARK_YELLOW     0x9460
 #define WHITE           0xFFFF
 
-#define FLICKER_SPEED_MS   500
-#define DISPlAY_REFRESH_MS FLICKER_SPEED_MS
-#define MAX_TEMP           230
+#define FLICKER_SPEED_MS        500
+#define DISPlAY_REFRESH_MS      FLICKER_SPEED_MS
+#define MAX_TEMP                230
+#define HEAT_OUTPUT_OFF_OFFSET  25
 
-Adafruit_SSD1331 display = Adafruit_SSD1331(&SPI, cs, dc, rst);
+Adafruit_SSD1331 display = Adafruit_SSD1331(&SPI, oled_cs, dc, rst);
 Encoder rotaryEncoder(rotaryA, rotaryB);
+MAX6675 thermocouple(sclk, thermo_cs, miso);
+
 
 enum SCREEN {
     MAIN_MENU,
@@ -68,6 +76,8 @@ void setup(void) {
     Serial.begin(115200);
 
     pinMode(button1, INPUT_PULLUP);
+    pinMode(heatOutput1, OUTPUT);
+    pinMode(heatOutput2, OUTPUT);
 
     display.begin();
     changeScreen(MAIN_MENU);
@@ -98,9 +108,18 @@ void loop() {
         if (targetMillis - millis() <= 0 || targetMillis - millis() > 60L * 60L * 1000L + 1L) {
             reflowRunning = false;
         }
+
+        heatingOn = currentTemperature < targetTemperature - HEAT_OUTPUT_OFF_OFFSET;
+    } else {
+        heatingOn = false;
     }
+    
+    digitalWrite(heatOutput1, reflowRunning && heatingOn ? HIGH : LOW);
+    digitalWrite(heatOutput2, reflowRunning && heatingOn ? HIGH : LOW);
 
     updateRotary();
+
+    currentTemperature = thermocouple.readCelsius();
 }
 
 void updateRotary(void) {
